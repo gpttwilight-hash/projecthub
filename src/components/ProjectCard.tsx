@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Github, AlertTriangle, Clock, ChevronDown, ChevronUp, Pencil, Trash2, ExternalLink } from 'lucide-react';
+import { Github, AlertTriangle, Clock, ChevronDown, ChevronUp, Pencil, Trash2, ExternalLink, Bot, Check } from 'lucide-react';
 import { Project, STATUS_CONFIG, PROGRESS_GRADIENT } from '../types';
 
 interface Props {
@@ -9,8 +9,34 @@ interface Props {
   index: number;
 }
 
+function generateAiPrompt(p: Project): string {
+  const date = new Date(p.updatedAt).toLocaleDateString('ru-RU');
+  return `# Контекст проекта: ${p.name}
+> Этот промт сгенерирован автоматически из Project Hub. Актуально на ${date}.
+
+## Обзор
+${p.description || 'Нет описания'}
+
+**Статус:** ${p.status} | **Прогресс:** ${p.progress}%
+**Стек:** ${p.techStack.join(', ') || 'не указан'}
+${p.githubUrl ? `**GitHub:** ${p.githubUrl}` : ''}
+
+## Где остановились
+${p.lastSessionNotes || 'Заметок нет'}
+
+## Текущие блокеры
+${p.problems.length > 0 ? p.problems.map(pr => `- ❌ ${pr}`).join('\n') : '— блокеров нет'}
+
+## Инструкция для ИИ
+Ты помогаешь разрабатывать проект **${p.name}**.
+${p.githubUrl ? `Репозиторий: ${p.githubUrl}` : ''}
+Текущий прогресс ${p.progress}%. Изучи контекст выше и помоги продолжить работу с того места, где остановились.
+Если есть блокеры — начни с них. Задавай уточняющие вопросы если что-то неясно.`;
+}
+
 export default function ProjectCard({ project, onEdit, onDelete, index }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
   const cfg = STATUS_CONFIG[project.status];
   const gradient = PROGRESS_GRADIENT[project.status];
 
@@ -23,6 +49,12 @@ export default function ProjectCard({ project, onEdit, onDelete, index }: Props)
     if (days < 30) return `${Math.floor(days / 7)}w ago`;
     return `${Math.floor(days / 30)}mo ago`;
   })();
+
+  const handleCopyPrompt = () => {
+    navigator.clipboard.writeText(generateAiPrompt(project));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div
@@ -104,19 +136,33 @@ export default function ProjectCard({ project, onEdit, onDelete, index }: Props)
         </div>
       )}
 
-      {/* Expand toggle */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors w-fit"
-      >
-        {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-        {expanded ? 'Less' : 'Details'}
-      </button>
+      {/* Bottom row: expand + copy AI prompt */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors"
+        >
+          {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          {expanded ? 'Less' : 'Details'}
+        </button>
+
+        <button
+          onClick={handleCopyPrompt}
+          className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg transition-all"
+          style={copied
+            ? { background: 'rgba(0,232,122,0.1)', color: '#00e87a', border: '1px solid rgba(0,232,122,0.2)' }
+            : { background: 'rgba(0,212,255,0.07)', color: 'rgba(0,212,255,0.6)', border: '1px solid rgba(0,212,255,0.15)' }
+          }
+          title="Скопировать промт для ИИ"
+        >
+          {copied ? <Check size={11} /> : <Bot size={11} />}
+          {copied ? 'Скопировано!' : 'AI Prompt'}
+        </button>
+      </div>
 
       {/* Expanded section */}
       {expanded && (
         <div className="flex flex-col gap-3 border-t border-white/5 pt-3">
-          {/* Last session */}
           {project.lastSessionNotes && (
             <div>
               <div className="text-[11px] font-mono text-white/30 mb-1.5 uppercase tracking-wider">Last Session</div>
@@ -126,7 +172,6 @@ export default function ProjectCard({ project, onEdit, onDelete, index }: Props)
             </div>
           )}
 
-          {/* Problems */}
           {project.problems.length > 0 && (
             <div>
               <div className="text-[11px] font-mono text-white/30 mb-1.5 uppercase tracking-wider">Blockers</div>
@@ -141,7 +186,6 @@ export default function ProjectCard({ project, onEdit, onDelete, index }: Props)
             </div>
           )}
 
-          {/* GitHub link full */}
           {project.githubUrl && (
             <a
               href={project.githubUrl}
